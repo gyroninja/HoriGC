@@ -147,6 +147,7 @@ Connecting a 3.3V GC controller data line directly to a 5V SNES output would ove
 ### Parts
 
 - 1× **TXB0101** (or similar single-channel bidirectional level shifter) — e.g. TI TXB0101DCKR, or the SparkFun/Adafruit breakout boards
+- 1× **1kΩ resistor** (pull-up on GC data line to 3.3V)
 - 1× **3.3V LDO regulator** — e.g. AMS1117-3.3 or LD1117-3.3 (TO-92 or SOT-223)
 - 1× **100nF decoupling capacitor** (across the LDO output)
 - 1× **SNES controller plug** (male, to plug into the console)
@@ -158,33 +159,37 @@ All parts are available from the usual electronics suppliers (Mouser, Digikey, L
 ### Wiring
 
 ```
-SNES port                         GC socket
-(male plug)                       (female)
+SNES port                              GC socket
+(male plug)                            (female)
 
-Pin 1  +5V ──────────────────── Pin 1  +5V (motor/LED power)
+Pin 1  +5V ──────────────────────── Pin 1  +5V (rumble motor, optional)
          │
          └── LDO IN
-             LDO OUT ─── 100nF ─ GND
-             LDO OUT ──────────── Pin 6  +3.3V (controller logic power)
+             LDO OUT ──┬── 100nF ── GND
+                       ├─────────── Pin 6  +3.3V (controller logic supply)
+                       └── 1kΩ ──── Pin 2  Data (pull-up to 3.3V)
 
-Pin 4  Data ── TXB0101 A side
-               TXB0101 B side ── Pin 2  Data (bidirectional)
-               TXB0101 VCCA ──── +5V
-               TXB0101 VCCB ──── +3.3V (from LDO)
-               TXB0101 OE  ───── +5V (always enabled)
+Pin 3  Latch ─┐
+              ├─── TXB0101 A side
+Pin 4  Data  ─┘    TXB0101 B side ── Pin 2  Data (bidirectional)
+               TXB0101 VCCA ──────── +5V
+               TXB0101 VCCB ──────── +3.3V (from LDO)
+               TXB0101 OE   ──────── +5V (always enabled)
 
-Pin 7  GND ───────────────────── Pin 3  GND
-                                  Pin 4  GND
+Pin 7  GND ──────────────────────── Pin 3  GND
+                                    Pin 4  GND
+                                    Pin 7  GND (shield)
 ```
 
-SNES pins 2 (Clock) and 3 (Latch) are **left unconnected** — the ROM ignores them and reads JOYSER0 directly as a GPIO rather than using the normal SNES controller shift-register protocol.
+SNES pin 2 (Clock) is left unconnected — it is only used by the standard hardware shift-register protocol which this ROM bypasses entirely.
 
 ### Notes
 
 - **Only SNES controller port 1** works. The ROM reads `JOYSER0` (`0x4016`) which is wired to port 1 only.
-- The TXB0101 is truly bidirectional with no direction-control pin, which suits the GC single-wire protocol where both host and controller drive the same line at different times. Avoid unidirectional shifters (e.g. 74HCT245) which would block the controller's reply.
-- If you want to avoid a dedicated level shifter IC, a simple **resistor voltage divider** (1kΩ + 2kΩ from SNES pin 4 to GND, tap between them to GC pin 2) will drop 5V to 3.3V for the outgoing signal. The GC controller's data line drives 3.3V back which is read by the SNES as a valid logic high at 5V TTL levels (threshold ~2V). This is less clean but works in practice and needs no extra IC.
-- The GC controller does not require the rumble motor supply (+3.3V on pin 6) to function — you can leave pin 6 unconnected if you don't need rumble (this ROM doesn't use it).
+- The TXB0101 is truly bidirectional with no direction-control pin, which suits the GC open-drain single-wire protocol where both host and controller pull the line low at different times. Avoid unidirectional shifters (e.g. 74HCT245) which would block the controller's reply.
+- The **1kΩ pull-up** to 3.3V on GC pin 2 is required. The GC protocol is open-drain — neither side ever drives the line high, so without a pull-up the line can never return to idle-high between bits.
+- The GC controller **logic supply is on Pin 6**, not Pin 5. Pin 5 is unused. Connecting Pin 6 to GND would short the supply rail and destroy the controller.
+- Rumble (Pin 1) is optional — this ROM does not activate it. Leave Pin 1 unconnected if you don't need rumble.
 
 ### Completed converter
 
